@@ -10,7 +10,7 @@ def store_verification_code_with_phone_number(verification_code, phone_number):
 
 def is_verification_code_with_phone_number_correct(verification_code, phone_number):
     r = get_redis_conn()
-    return verification_code == r.get("vcode" + phone_number).decode('utf-8')
+    return verification_code == r.get("vcode" + phone_number)
 
 def generate_token(serial_number, phone_number):
     token = serial_number
