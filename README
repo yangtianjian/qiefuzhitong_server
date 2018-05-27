@@ -1,0 +1,5 @@
+Flask for web framework
+Chainer for trainning and predict
+ResNet23 for classify disease
+D_ResNet combine double ResNet23 to classify trend
+This is backend program for intel, and service are reliable on aliyun

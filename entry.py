@@ -6,10 +6,11 @@ from lib import models
 from PIL import Image
 import numpy as np
 import json
+from resnet23 import train_res23
+from d_resnet import D_ResNet_Train
 import uuid
 
 app = Flask(__name__)
-
 
 @app.route('/get_verification_code', methods=['post'])
 def get_verification_code():
@@ -24,7 +25,6 @@ def get_verification_code():
     else:
         return json.dumps({'errno': 1})
 
-
 @app.route('/check_login_state', methods=['post'])
 def check_login_state():
     token = request.form['token']
@@ -33,8 +33,7 @@ def check_login_state():
         return json.dumps({'errno': 0, 'user_name': mongo_service.get_user_name_by_phone_number(result['phone_number'])})
     else:
         return json.dumps({'errno': 1})
-
-
+ 
 @app.route('/login', methods=['post'])
 def login():
     phone_number = request.form['phone_number']
@@ -47,15 +46,48 @@ def login():
     else:
         return json.dumps({'errno': 2})
 
-
 @app.route('/recognition', methods=['post'])
 def recognition():
-    return None
-
-
+    image = request.files['image']
+    image_path = 'tmpdata/' + str(uuid.uuid1())
+    image.save(image_path)
+    image = Image.open(image_path).resize((128,128))
+    data = np.asarray(image.convert('RGB'), dtype='float32')
+    data = np.transpose(data/255)
+    data = np.asarray([data])
+    class_no = models.get_disease_class_no(train_res23.predict_disease(data))
+    disease_info = mongo_service.get_disease_by_disease_class_no(class_no)
+    return json.dumps(disease_info)
+    
 @app.route('/update_monitor', methods=['post'])
 def update_monitor():
-    return None
+    token = request.form['token']
+    monitor_name = request.form['monitor_name']
+    image = request.files['image']
+    image_path = 'data/' + str(uuid.uuid1())
+    image.save(image_path)
+    phone_number = redis_service.get_phone_number_by_token(token)
+    pics = mongo_service.save_monitor_pic_and_get_pics(phone_number, monitor_name, image_path)
+    if len(pics) >= 2:
+        image_path1, image_path2 = pics[-2], pics[-1]
+        image1 = Image.open(image_path1).resize((128,128))
+        data1 = np.asarray(image1.convert('RGB'), dtype='float32')
+        data1 = np.transpose(data1/255)
+        data1 = np.asarray([data1])
+        image2 = Image.open(image_path2).resize((128,128))
+        data2 = np.asarray(image1.convert('RGB'), dtype='float32')
+        data2 = np.transpose(data2/255)
+        data2 = np.asarray([data2])
+        data = [data1, data2]
+        data = np.asarray(data)
+        result = D_ResNet_Train.trend_predict(data)
+        class_no = models.get_trend_class_no(result)
+        if class_no == 0:
+            trend = 'up'
+        else:
+            trend = 'down'
+        mongo_service.update_trend(phone_number, monitor_name, trend)
+    return json.dumps({'errno': 0})
 
 
 @app.route('/update_user_name', methods=['post'])
